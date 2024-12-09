@@ -1,0 +1,14 @@
+-- get the Players service
+local Players = game:GetService("Players")
+
+-- ensure the local player is available
+local localPlayer = Players.LocalPlayer
+
+-- wait until the local player is present
+while not localPlayer do
+    Players.PlayerAdded:Wait()
+    localPlayer = Players.LocalPlayer
+end
+
+-- print the local player's name
+print(localPlayer.Name)
