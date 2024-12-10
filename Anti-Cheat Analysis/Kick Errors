@@ -1,0 +1,1 @@
+local gs = game:GetService("GuiService") local em={} while task.wait(0.5) do local e=gs:GetErrorMessage() if e~="" then print("Error detected: "..e) em[e]=(em[e] or 0)+1 gs:ClearError() end en
