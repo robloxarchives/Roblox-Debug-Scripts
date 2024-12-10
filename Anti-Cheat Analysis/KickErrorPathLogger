@@ -1,3 +1,4 @@
+-- For context, get kicked by your anti-cheat before running this script
 local a=game:GetService("GuiService")
 local b={}
 local c=0
