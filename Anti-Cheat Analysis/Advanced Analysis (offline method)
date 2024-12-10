@@ -1,0 +1,84 @@
+local Players = game:GetService("Players")
+local GuiService = game:GetService("GuiService")
+local NetworkServer = game:GetService("NetworkServer")
+
+local LocalPlayer = Players.LocalPlayer
+local errorLogs = {}
+local dexChanges = {}
+local scanInterval = 0.5
+local reportInterval = 60
+local previousInstances = {}
+local logBuffer = {}
+
+-- Function to handle DEX changes
+local function onDexChange(name, changeType)
+    table.insert(logBuffer, {os.date(), "DEX Change detected: " .. name .. " was " .. changeType})
+end
+
+-- Function to scan DEX
+local function scanDex()
+    local currentInstances = {}
+    local function traverse(instance)
+        currentInstances[instance:GetFullName()] = true
+        for _, child in ipairs(instance:GetChildren()) do
+            traverse(child)
+        end
+    end
+    traverse(game)
+
+    -- Detect added instances
+    for name in pairs(currentInstances) do
+        if not previousInstances[name] then
+            onDexChange(name, "added")
+        end
+    end
+
+    -- Detect removed instances
+    for name in pairs(previousInstances) do
+        if not currentInstances[name] then
+            onDexChange(name, "removed")
+        end
+    end
+
+    previousInstances = currentInstances
+end
+
+-- Function to log GUI errors
+local function logError()
+    local errorMessage = GuiService:GetErrorMessage()
+    if errorMessage ~= "" then
+        table.insert(logBuffer, {os.date(), "Advanced Error detected: " .. errorMessage})
+        errorLogs[errorMessage] = (errorLogs[errorMessage] or 0) + 1
+        GuiService:ClearError()
+    end
+end
+
+-- Placeholder function for network traffic analysis
+local function analyzeNetworkTraffic()
+    -- Add code for advanced network analysis here
+end
+
+-- Function to generate and print detailed report
+local function generateReport()
+    print("Detailed Analysis of collected error messages, network traffic, and DEX changes:")
+    for _, log in ipairs(logBuffer) do
+        print(log[1] .. " - " .. log[2])
+    end
+    logBuffer = {}
+    for error, count in pairs(errorLogs) do
+        print("Error: '" .. error .. "' occurred " .. count .. " times.")
+    end
+end
+
+-- Main loop
+local elapsedTime = 0
+while task.wait(scanInterval) do
+    logError()
+    analyzeNetworkTraffic()
+    scanDex()
+    elapsedTime = elapsedTime + scanInterval
+    if elapsedTime >= reportInterval then
+        generateReport()
+        elapsedTime = 0
+    end
+end
