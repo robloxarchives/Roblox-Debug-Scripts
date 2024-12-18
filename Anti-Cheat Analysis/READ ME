@@ -1,0 +1,7 @@
+Every Game You Perform Analysis, you must manually turn off your wifi without a script. 
+
+Be sure your executor was already injected before disconnecting from wifi.
+
+Then Run This script:
+
+game:GetService("GuiService"):ClearError()
