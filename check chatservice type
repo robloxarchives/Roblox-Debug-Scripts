@@ -1,0 +1,6 @@
+local tcs = game:GetService("TextChatService")
+if tcs.ChatVersion == Enum.ChatVersion.TextChatService then
+    print("TextChatService (Modern)")
+elseif tcs.ChatVersion == Enum.ChatVersion.LegacyChatService then
+    print("LegacyChatService (Undetected)")
+end
