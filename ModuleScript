@@ -1,0 +1,11 @@
+local ModuleScript = {}
+
+function ModuleScript.printTest()
+    print("hello world 1")
+end
+
+function ModuleScript.printTest2()
+    print("hello world 2")
+end
+
+return ModuleScript
