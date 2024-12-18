@@ -1,0 +1,4 @@
+local module = require(game.ReplicatedStorage.ModuleScript) -- assuming the ModuleScript is in ReplicatedStorage
+
+module.printTest() -- this calls the function "printTest" in the module, and therefore, prints "hello world 1"
+module.printTest2() -- this calls the function "printTest2" in the module, and therefore, prints "hello world 2"
