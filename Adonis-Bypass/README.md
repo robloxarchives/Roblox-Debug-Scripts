@@ -10,7 +10,9 @@
 ---
 
 ### 🏗️ Creator of Adonis
-[Adonis Framework – Epix Incorporated](https://github.com/Epix-Incorporated/Adonis)
+**Epix Incorporated**  
+- [Adonis Framework (GitHub)](https://github.com/Epix-Incorporated/Adonis)  
+- [Official Anti-Cheat Script (Anti.luau)](https://raw.githubusercontent.com/Epix-Incorporated/Adonis/refs/heads/master/MainModule/Client/Core/Anti.luau)
 
 ---
 
