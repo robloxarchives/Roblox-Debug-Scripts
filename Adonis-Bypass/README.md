@@ -3,8 +3,8 @@
 File: 
 [Original](https://raw.githubusercontent.com/C0RP0RATE/Oblivious/refs/heads/main/Adonis_AntiCheat_Bypass_V2.lua)
 
-Main Anti-Cheat Devs
-[Main Adonis Github](https://github.com/Epix-Incorporated/Adonis)
+# Creator of Adonis
+[Adonis](https://github.com/Epix-Incorporated/Adonis)
 
 # Roblox Assets:
 [Adonis Anti-Cheat (Roblox Asset)](https://create.roblox.com/store/asset/7510592873/Adonis-MainModule)
