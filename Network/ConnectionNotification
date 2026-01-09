@@ -1,0 +1,289 @@
+--========================================================--
+-- MICRO-DROP NETWORK QUALITY DETECTOR (ROBLOX)
+-- Very sensitive to tiny dips/spikes (when Stats exist)
+-- Uses EWMA baseline + deviation scoring
+--========================================================--
+
+--========================
+-- Services
+--========================
+local TweenService = game:GetService("TweenService")
+local Players      = game:GetService("Players")
+local Stats        = game:GetService("Stats")
+
+local player = Players.LocalPlayer
+
+--========================
+-- Config (tune sensitivity here)
+--========================
+local CFG = {
+    SAMPLE_DT = 0.10,        -- 10 Hz sampling (fast)
+    CALIBRATE_SECONDS = 3.0, -- learn baseline first
+
+    -- Micro sensitivity thresholds:
+    KBPS_DROP_PCT_MINOR  = 0.06, -- 6% dip from baseline => "Unstable"
+    KBPS_DROP_PCT_SEVERE = 0.18, -- 18% dip => "Bad"
+
+    PING_RISE_MS_MINOR   = 18,   -- +18ms over baseline => "Unstable"
+    PING_RISE_MS_SEVERE  = 70,   -- +70ms => "Bad"
+
+    -- smoothing (higher = reacts slower, lower = reacts faster)
+    BASELINE_ALPHA = 0.06, -- EWMA for baseline
+    NOISE_ALPHA    = 0.08, -- EWMA for "noise"/variance proxy
+
+    -- UI
+    DEBUG = true,          -- show debug line
+    HIDE_WHEN_GOOD = true,
+    HIDE_DELAY = 1.6,
+}
+
+--========================
+-- GUI parent (CoreGui if allowed else PlayerGui)
+--========================
+local function getGuiParent()
+    local ok, coreGui = pcall(function() return game:GetService("CoreGui") end)
+    if ok and coreGui then
+        local f = Instance.new("Folder")
+        f.Name = "__gui_test"
+        local ok2 = pcall(function() f.Parent = coreGui end)
+        f:Destroy()
+        if ok2 then return coreGui end
+    end
+    return player:WaitForChild("PlayerGui")
+end
+
+-- cleanup old
+do
+    local parent = getGuiParent()
+    local old = parent:FindFirstChild("MicroNet")
+    if old then old:Destroy() end
+end
+
+--========================
+-- UI
+--========================
+local gui = Instance.new("ScreenGui")
+gui.Name = "MicroNet"
+gui.IgnoreGuiInset = true
+gui.ResetOnSpawn = false
+gui.Parent = getGuiParent()
+
+local frame = Instance.new("Frame")
+frame.Parent = gui
+frame.Size = UDim2.fromScale(0.34, 0.075)
+frame.Position = UDim2.fromScale(0.33, 0.05)
+frame.BackgroundColor3 = Color3.fromRGB(18, 18, 18)
+frame.BackgroundTransparency = 1
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Parent = frame
+title.Size = UDim2.new(1, 0, 0.62, 0)
+title.BackgroundTransparency = 1
+title.TextTransparency = 1
+title.TextScaled = true
+title.Font = Enum.Font.GothamBold
+title.TextColor3 = Color3.new(1, 1, 1)
+
+local debug = Instance.new("TextLabel")
+debug.Parent = frame
+debug.Size = UDim2.new(1, 0, 0.38, 0)
+debug.Position = UDim2.new(0, 0, 0.62, 0)
+debug.BackgroundTransparency = 1
+debug.TextTransparency = 1
+debug.TextScaled = true
+debug.Font = Enum.Font.Gotham
+debug.TextColor3 = Color3.fromRGB(200, 200, 200)
+debug.Visible = CFG.DEBUG
+
+local function tweenIn()
+    local ti = TweenInfo.new(0.18, Enum.EasingStyle.Quart)
+    TweenService:Create(frame, ti, { BackgroundTransparency = 0.15 }):Play()
+    TweenService:Create(title, ti, { TextTransparency = 0 }):Play()
+    if CFG.DEBUG then TweenService:Create(debug, ti, { TextTransparency = 0 }):Play() end
+end
+
+local function tweenOut()
+    local ti = TweenInfo.new(0.35, Enum.EasingStyle.Quint)
+    TweenService:Create(frame, ti, { BackgroundTransparency = 1 }):Play()
+    TweenService:Create(title, ti, { TextTransparency = 1 }):Play()
+    if CFG.DEBUG then TweenService:Create(debug, ti, { TextTransparency = 1 }):Play() end
+end
+
+local hideToken = 0
+local function scheduleHide()
+    hideToken += 1
+    local token = hideToken
+    task.delay(CFG.HIDE_DELAY, function()
+        if token == hideToken then tweenOut() end
+    end)
+end
+
+--========================
+-- Stats getters (must exist for micro-drops)
+--========================
+local function getReceiveKbps()
+    local item = Stats:FindFirstChild("DataReceiveKbps")
+    if item and item.GetValue then
+        local ok, v = pcall(function() return item:GetValue() end)
+        if ok and type(v) == "number" then return v end
+    end
+    return nil
+end
+
+local function getPingMs()
+    local net = Stats:FindFirstChild("Network")
+    if not net then return nil end
+    local ssi = net:FindFirstChild("ServerStatsItem")
+    if not ssi then return nil end
+
+    -- try common names, then fuzzy
+    local direct = ssi:FindFirstChild("Data Ping") or ssi:FindFirstChild("Ping")
+    if direct and direct.GetValue then
+        local ok, v = pcall(function() return direct:GetValue() end)
+        if ok and type(v) == "number" then return v end
+    end
+
+    for _, child in ipairs(ssi:GetChildren()) do
+        local n = child.Name:lower()
+        if (n:find("ping") or n:find("rtt") or n:find("round")) and child.GetValue then
+            local ok, v = pcall(function() return child:GetValue() end)
+            if ok and type(v) == "number" then return v end
+        end
+    end
+
+    return nil
+end
+
+--========================
+-- EWMA helpers
+--========================
+local function ewma(prev, x, a)
+    if prev == nil then return x end
+    return prev + a * (x - prev)
+end
+
+--========================
+-- State
+--========================
+local t0 = os.clock()
+local calibrated = false
+
+local baseK, baseP         -- baselines
+local noiseK, noiseP       -- noise proxy (avg abs deviation)
+local lastState = "INIT"
+
+local function setState(state, mainText, color, dbgText)
+    if state == lastState then
+        if CFG.DEBUG then debug.Text = dbgText end
+        return
+    end
+    lastState = state
+    title.Text = mainText
+    title.TextColor3 = color
+    if CFG.DEBUG then debug.Text = dbgText end
+    tweenIn()
+    if CFG.HIDE_WHEN_GOOD and state == "GOOD" then
+        scheduleHide()
+    end
+end
+
+--========================
+-- Main loop
+--========================
+task.spawn(function()
+    -- initial prompt
+    setState("INIT", "⏳ Calibrating…", Color3.fromRGB(180, 180, 180), "waiting for stats…")
+
+    while player.Parent do
+        local now = os.clock()
+        local kbps = getReceiveKbps()
+        local ping = getPingMs()
+
+        if kbps == nil or ping == nil then
+            setState(
+                "NOSTATS",
+                "⚠ Network stats unavailable",
+                Color3.fromRGB(255, 200, 90),
+                ("kbps=%s ping=%s (can't do micro-drops here)"):format(tostring(kbps), tostring(ping))
+            )
+            task.wait(CFG.SAMPLE_DT)
+            continue
+        end
+
+        -- calibrate
+        if not calibrated then
+            baseK = ewma(baseK, kbps, 0.15)
+            baseP = ewma(baseP, ping, 0.15)
+            noiseK = ewma(noiseK, math.abs(kbps - (baseK or kbps)), 0.20)
+            noiseP = ewma(noiseP, math.abs(ping - (baseP or ping)), 0.20)
+
+            local elapsed = now - t0
+            setState(
+                "INIT",
+                "⏳ Calibrating…",
+                Color3.fromRGB(180, 180, 180),
+                ("kbps=%.2f  ping=%d  (%.1fs/%.1fs)"):format(kbps, math.floor(ping+0.5), elapsed, CFG.CALIBRATE_SECONDS)
+            )
+
+            if elapsed >= CFG.CALIBRATE_SECONDS then
+                calibrated = true
+                setState("GOOD", "✓ Connection Stable", Color3.fromRGB(90, 255, 130),
+                    ("baseK=%.2f baseP=%d"):format(baseK, math.floor(baseP+0.5))
+                )
+            end
+
+            task.wait(CFG.SAMPLE_DT)
+            continue
+        end
+
+        -- update baselines slowly (tracks long-term shifts)
+        baseK = ewma(baseK, kbps, CFG.BASELINE_ALPHA)
+        baseP = ewma(baseP, ping, CFG.BASELINE_ALPHA)
+
+        -- update noise proxies (helps interpret tiny movement)
+        noiseK = ewma(noiseK, math.abs(kbps - baseK), CFG.NOISE_ALPHA)
+        noiseP = ewma(noiseP, math.abs(ping - baseP), CFG.NOISE_ALPHA)
+
+        -- deviation measures
+        local kbpsDropPct = (baseK > 0) and math.max(0, (baseK - kbps) / baseK) or 0
+        local pingRiseMs  = math.max(0, ping - baseP)
+
+        -- score tiers (tiny dips included)
+        local tier = "GOOD"
+        if kbpsDropPct >= CFG.KBPS_DROP_PCT_SEVERE or pingRiseMs >= CFG.PING_RISE_MS_SEVERE then
+            tier = "BAD"
+        elseif kbpsDropPct >= CFG.KBPS_DROP_PCT_MINOR or pingRiseMs >= CFG.PING_RISE_MS_MINOR then
+            tier = "UNSTABLE"
+        end
+
+        local dbg = ("kbps=%.2f (base %.2f, drop %.1f%%) | ping=%d (base %d, +%dms) | noiseK=%.2f noiseP=%.1f")
+            :format(
+                kbps, baseK, kbpsDropPct*100,
+                math.floor(ping+0.5), math.floor(baseP+0.5), math.floor(pingRiseMs+0.5),
+                noiseK or 0, noiseP or 0
+            )
+
+        if tier == "BAD" then
+            setState("BAD", "⚠ Connection Bad", Color3.fromRGB(255, 85, 85), dbg)
+        elseif tier == "UNSTABLE" then
+            setState("UNSTABLE", "⚠ Connection Unstable", Color3.fromRGB(255, 200, 90), dbg)
+        else
+            setState("GOOD", "✓ Connection Stable", Color3.fromRGB(90, 255, 130), dbg)
+        end
+
+        task.wait(CFG.SAMPLE_DT)
+    end
+end)
+
+-- Cleanup
+Players.PlayerRemoving:Connect(function(p)
+    if p == player then
+        gui:Destroy()
+    end
+end)
